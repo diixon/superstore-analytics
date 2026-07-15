@@ -1,0 +1,15 @@
+# System files  
+Thumbs.db  
+Desktop.ini  
+  
+# SQL Server  
+*.mdf  
+*.ldf  
+*.bak  
+  
+# VS Code  
+.vscode/  
+  
+# Temporary files  
+*.tmp  
+*.log 
