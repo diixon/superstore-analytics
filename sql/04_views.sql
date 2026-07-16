@@ -1,5 +1,17 @@
 -- ============================================
--- View 1: Sales Summary
+-- Script:    04_views.sql
+-- Purpose:   Analytics views for reporting and Power BI consumption
+-- Project:   SuperStore Analytics
+-- ============================================
+
+USE SuperStoreProject;
+GO
+SET NOCOUNT ON;
+GO
+
+-- ============================================
+-- View: gold.vw_sales_summary
+-- Purpose: Full star-schema join, row-level grain, for ad-hoc exploration
 -- ============================================
 IF OBJECT_ID('gold.vw_sales_summary', 'V') IS NOT NULL
     DROP VIEW gold.vw_sales_summary;
@@ -45,8 +57,10 @@ JOIN gold.dim_location l ON f.location_key = l.location_key
 LEFT JOIN gold.dim_ship_mode sm ON f.ship_mode_key = sm.ship_mode_key
 LEFT JOIN gold.dim_sales_person sp ON f.sales_person_key = sp.sales_person_key;
 GO
+
 -- ============================================
--- View 2: Product Performance
+-- View: gold.vw_product_performance
+-- Purpose: Product-level sales, profit, and return metrics
 -- ============================================
 IF OBJECT_ID('gold.vw_product_performance', 'V') IS NOT NULL
     DROP VIEW gold.vw_product_performance;
@@ -72,7 +86,8 @@ GROUP BY p.product_id, p.product_name, p.category, p.sub_category;
 GO
 
 -- ============================================
--- View 3: Customer Analysis
+-- View: gold.vw_customer_analysis
+-- Purpose: Customer-level spend, profit, and segmentation metrics
 -- ============================================
 IF OBJECT_ID('gold.vw_customer_analysis', 'V') IS NOT NULL
     DROP VIEW gold.vw_customer_analysis;
@@ -95,7 +110,8 @@ GROUP BY c.customer_id, c.customer_name, c.segment;
 GO
 
 -- ============================================
--- View 4: Regional Performance
+-- View: gold.vw_regional_performance
+-- Purpose: Geographic sales performance by region/state/city
 -- ============================================
 IF OBJECT_ID('gold.vw_regional_performance', 'V') IS NOT NULL
     DROP VIEW gold.vw_regional_performance;
@@ -120,7 +136,8 @@ GROUP BY l.region, l.state, l.city, sp.person_name;
 GO
 
 -- ============================================
--- View 5: Shipping Performance
+-- View: gold.vw_shipping_performance
+-- Purpose: Ship mode performance and delivery time metrics
 -- ============================================
 IF OBJECT_ID('gold.vw_shipping_performance', 'V') IS NOT NULL
     DROP VIEW gold.vw_shipping_performance;
@@ -141,7 +158,8 @@ GROUP BY sm.ship_mode;
 GO
 
 -- ============================================
--- View 6: Monthly Trends
+-- View: gold.vw_monthly_trends
+-- Purpose: Time-series aggregation for trend analysis
 -- ============================================
 IF OBJECT_ID('gold.vw_monthly_trends', 'V') IS NOT NULL
     DROP VIEW gold.vw_monthly_trends;
@@ -164,4 +182,7 @@ SELECT
 FROM gold.fact_sales f
 JOIN gold.dim_date d ON f.order_date_key = d.date_key
 GROUP BY d.year, d.month, d.month_name, d.month_year_label, d.quarter_name, d.season;
+GO
+
+PRINT 'All 6 gold layer views created successfully.';
 GO

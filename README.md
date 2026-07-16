@@ -1,226 +1,241 @@
-# 🏪 SuperStore Sales Data Warehouse
+# SuperStore Analytics
 
-An end-to-end data engineering project built with **SQL Server** and **Power BI**, following the **Medallion Architecture** (Bronze → Silver → Gold).
+An end-to-end data analytics project built on a single retail sales dataset — from raw Excel data, through a SQL Server data warehouse built with a **Medallion (Bronze → Silver → Gold) architecture**, into a **4-page Power BI dashboard**.
 
-![SQL Server](https://img.shields.io/badge/SQL%20Server-CC2927?style=flat&logo=microsoft-sql-server&logoColor=white)
-![Power BI](https://img.shields.io/badge/Power%20BI-F2C811?style=flat&logo=power-bi&logoColor=black)
-![HTML](https://img.shields.io/badge/HTML5-E34F26?style=flat&logo=html5&logoColor=white)
-![Git](https://img.shields.io/badge/Git-F05032?style=flat&logo=git&logoColor=white)
+This project was built as a hands-on exercise in data warehouse design, T-SQL development, dimensional modeling, and BI dashboard design.
 
 ---
 
-## 📊 Project Overview
+## 📖 Overview
 
-This project transforms raw SuperStore sales data (2016–2019) into a fully modeled **star schema data warehouse**, complete with an interactive dashboard.
+Retail sales data (orders, sales reps, and returns) starts as a single Excel workbook and flows through three progressively refined layers in SQL Server before landing in a Power BI report:
 
-| Metric | Value |
-|--------|------:|
-| Total Sales | $2.3M |
-| Total Orders | 5,006 |
-| Products | 1,894 |
-| Customers | 793 |
-| Line Items | 9,993 |
-
----
-
-## 🏗️ Architecture
-
-```text
-┌──────────────────────────────────────────────┐
-│                BRONZE LAYER                  │
-│           Raw data imported as-is            │
-│                                              │
-│  • bronze.orders                            │
-│  • bronze.people                            │
-│  • bronze.returns_order                     │
-└───────────────────┬──────────────────────────┘
-                    │
-          Cleanse • Validate • Standardize
-                    ▼
-┌──────────────────────────────────────────────┐
-│                SILVER LAYER                  │
-│     Cleaned, deduplicated, validated data    │
-│                                              │
-│  • silver.orders                            │
-│  • silver.people                            │
-│  • silver.returns_order                     │
-└───────────────────┬──────────────────────────┘
-                    │
-            Star Schema Modeling
-                    ▼
-┌──────────────────────────────────────────────┐
-│                 GOLD LAYER                   │
-│         Analytics-ready dimensional model    │
-│                                              │
-│  • dim_date (1,827 rows)                    │
-│  • dim_customer (793 rows)                  │
-│  • dim_product (1,894 rows)                 │
-│  • dim_location (632 rows)                  │
-│  • dim_ship_mode (4 rows)                   │
-│  • dim_sales_person (4 rows)                │
-│  • fact_sales (9,993 rows)                  │
-│  • 6 Analytics Views                        │
-└──────────────────────────────────────────────┘
 ```
+Excel (raw_data.xlsx)
+        │
+        ▼
+   BRONZE  →  SILVER  →  GOLD  →  Power BI Dashboard
+  (raw data) (cleansed) (star schema)
+```
+
+- **Bronze** — raw data landed exactly as imported, no transformation
+- **Silver** — cleansed, validated, and deduplicated data with documented data-quality fixes
+- **Gold** — a star schema (6 dimensions + 1 fact table) built for reporting, plus 6 analytics views
+- **Power BI** — a 4-page interactive dashboard with 13 DAX measures, connected directly to the Gold layer
+
+Full technical detail on each stage lives in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## 📑 Table of Contents
+
+- [Overview](#-overview)
+- [Features](#-features)
+- [Technologies Used](#️-technologies-used)
+- [Project Structure](#-project-structure)
+- [Dashboard Preview](#-dashboard-preview)
+- [Installation](#-installation)
+- [Database Setup](#️-database-setup)
+- [Usage](#-usage)
+- [Configuration](#️-configuration)
+- [Deployment](#-deployment)
+- [Future Improvements](#-future-improvements)
+- [Contribution Guidelines](#-contribution-guidelines)
+- [License](#-license)
+- [About the Author](#-about-the-author)
+
+---
+
+## ✨ Features
+
+- **Medallion architecture** implemented with stored procedures for each layer (`bronze.usp_CreateBronzeTables`, `silver.usp_LoadSilverLayer`, `gold.usp_LoadGoldLayer`)
+- **Documented data-quality fixes** — bad dates, invalid ship modes, invalid country codes, missing postal codes, malformed product names, and exact-duplicate removal, all handled in scripted, reproducible SQL rather than manual edits
+- **Star schema** with surrogate keys, a role-playing date dimension (order date vs. ship date), and a generated date dimension with fiscal/seasonal attributes
+- **6 analytics views** for product, customer, regional, shipping, and monthly-trend reporting
+- **Performance indexes** on fact-table foreign keys
+- **4-page Power BI dashboard** — Executive Summary, Product Analysis, Customer Insights, and Operations — with 13 custom DAX measures (Total Sales, Profit Margin, CLV, Return Rate, On Time Delivery %, and more)
+
+---
+
+## 🛠️ Technologies Used
+
+| Category | Technology |
+|---|---|
+| Database | SQL Server (T-SQL, stored procedures, views, indexes) |
+| Source data | Microsoft Excel (3-sheet workbook: Orders, People, Returns) |
+| Data import | SQL Server Import/Export Wizard (SSMS) |
+| BI / Visualization | Power BI Desktop, DAX |
+| Architecture pattern | Medallion (Bronze / Silver / Gold), Star Schema (Kimball-style dimensional modeling) |
 
 ---
 
 ## 📁 Project Structure
 
-```text
-super_store_prjct/
+```
+superstore-analytics/
 │
-├── README.md                      # Project documentation
-├── .gitignore                     # Files excluded from Git
+├── README.md                     ← you are here
+├── LICENSE
+├── .gitignore
 │
 ├── data/
-│   └── raw_data.xlsx              # Original SuperStore dataset
+│   └── raw/
+│       └── raw_data.xlsx         ← source workbook (Orders, People, Returns sheets)
 │
 ├── sql/
-│   ├── 00_init_database.sql       # Create database & schemas
-│   ├── 01_bronze_layer.sql        # Raw data import
-│   ├── 02_silver_layer.sql        # Data cleansing & validation
-│   ├── 03_gold_layer.sql          # Star schema (dimensions & fact)
-│   ├── 04_views.sql               # Analytics views
-│   └── 05_indexes.sql             # Performance indexes
+│   ├── 00_init_database.sql      ← creates database + bronze/silver/gold schemas
+│   ├── 01_bronze_layer.sql       ← raw landing tables
+│   ├── 02_silver_layer.sql       ← cleansing & deduplication
+│   ├── 03_gold_layer.sql         ← star schema (dimensions + fact table)
+│   ├── 04_views.sql              ← 6 analytics views
+│   └── 05_indexes.sql            ← performance indexes
 │
 ├── dashboard/
-│   ├── superstore_dashboard.html  # Interactive HTML dashboard
-│   └── superstore_dashboard.pbix  # Power BI report
+│   └── superstoredashboard.pbix  ← Power BI report (4 pages)
 │
 └── docs/
-    └── documentation files
+    ├── architecture.md           ← pipeline design & star schema explained
+    ├── data_dictionary.md        ← every table/column/view/measure defined
+    ├── setup_guide.md            ← step-by-step reproduction guide
+    └── screenshots/               ← dashboard page images
 ```
 
 ---
 
-## ⭐ Star Schema Design
+## 🖼️ Dashboard Preview
 
-### Dimension Tables
+### Executive Summary
+![Executive Summary](docs/screenshots/dashboard_executive.PNG)
 
-| Table | Rows | Description |
-|-------|-----:|-------------|
-| `dim_date` | 1,827 | Calendar lookup (2016–2020) |
-| `dim_customer` | 793 | Customer information |
-| `dim_product` | 1,894 | Product catalog (composite key) |
-| `dim_location` | 632 | City, state, postal code, region |
-| `dim_ship_mode` | 4 | Shipping methods |
-| `dim_sales_person` | 4 | Regional sales representatives |
+### Product Analysis
+![Product Analysis](docs/screenshots/dashboard_products.PNG)
 
-### Fact Table
+### Customer Insights
+![Customer Insights](docs/screenshots/dashboard_customers.PNG)
 
-| Table | Rows | Grain |
-|-------|-----:|-------|
-| `fact_sales` | 9,993 | One row per `order_id` + `product_id` |
-
-### Analytics Views
-
-| View | Purpose |
-|------|---------|
-| `vw_sales_summary` | Complete star schema join |
-| `vw_product_performance` | Product performance analysis |
-| `vw_customer_analysis` | Customer segmentation |
-| `vw_regional_performance` | Regional sales analysis |
-| `vw_shipping_performance` | Shipping performance metrics |
-| `vw_monthly_trends` | Monthly sales trends |
+### Operations
+![Operations](docs/screenshots/dashboard_operations.PNG)
 
 ---
 
-## 🔧 Key Technical Decisions
-
-| Decision | Implementation |
-|----------|----------------|
-| Duplicate products | Composite key (`product_id` + `product_name`) |
-| Duplicate rows | Removed exact duplicates in the Silver layer |
-| Invalid `ship_mode` values | Standardized into valid shipping categories |
-| Returns | Stored as `is_returned` (`BIT`) in the fact table |
-| Date dimension | Pre-generated with calendar attributes for BI |
-| Slowly Changing Dimensions | Type 1 (overwrite), suitable for static dataset |
-
----
-
-## 📈 Dashboard Features
-
-- 📌 KPI Cards (Sales, Profit, Orders, Average Order Value, Return Rate)
-- 📅 Monthly Sales Trend (2016–2019)
-- 🌎 Regional Performance Analysis
-- 📦 Category & Sub-category Breakdown
-- 🚚 Shipping Performance
-- 🏆 Top Products by Sales & Profit
-- 👥 Top Customers
-- 📱 Responsive HTML dashboard and Power BI report
-
----
-
-## 🚀 Getting Started
+## 🚀 Installation
 
 ### Prerequisites
-
-- SQL Server 2019+
+- SQL Server (Developer or Express edition), running locally with Windows Authentication
 - SQL Server Management Studio (SSMS)
-- Power BI Desktop (optional)
+- Power BI Desktop
+- Microsoft Access Database Engine Redistributable (required by SSMS to import `.xlsx` files) — [download here](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
 
-### Installation
-
-#### 1. Clone the repository
-
+### Quick start
 ```bash
-git clone https://github.com/diixon/super_store_prjct.git
-cd super_store_prjct
+git clone https://github.com/<your-username>/superstore-analytics.git
+cd superstore-analytics
 ```
 
-#### 2. Execute SQL scripts in order
+Then follow the full step-by-step walkthrough in [`docs/setup_guide.md`](docs/setup_guide.md), which covers:
+1. Running the SQL scripts in order
+2. Importing `data/raw/raw_data.xlsx` into the Bronze layer (via SSMS's Import Wizard — this step is manual since the source is Excel)
+3. Loading the Silver and Gold layers
+4. Opening the Power BI report and refreshing the connection
 
-```text
-00_init_database.sql
-01_bronze_layer.sql
-02_silver_layer.sql
-03_gold_layer.sql
-04_views.sql
-05_indexes.sql
-```
+---
 
-#### 3. Open the dashboards
+## 🗄️ Database Setup
 
-**HTML Dashboard**
+The database is rebuilt by running six scripts **in order**:
 
-```text
-dashboard/superstore_dashboard.html
-```
+| Step | Script | What it does |
+|---|---|---|
+| 1 | `00_init_database.sql` | Creates the `SuperStoreProject` database and `bronze`/`silver`/`gold` schemas |
+| 2 | `01_bronze_layer.sql` | Creates raw landing tables |
+| — | *(manual)* | Import `data/raw/raw_data.xlsx` into Bronze tables via SSMS Import Wizard |
+| 3 | `02_silver_layer.sql` | Cleanses and deduplicates data into the Silver layer |
+| 4 | `03_gold_layer.sql` | Builds the Gold star schema (dimensions + fact table) |
+| 5 | `04_views.sql` | Creates 6 analytics views |
+| 6 | `05_indexes.sql` | Adds performance indexes on the fact table |
 
-**Power BI Report**
+⚠️ `00_init_database.sql` drops and recreates the database if it already exists — only run it for a full rebuild.
 
-```text
-dashboard/superstore_dashboard.pbix
+See [`docs/setup_guide.md`](docs/setup_guide.md) for the complete walkthrough, including the exact Excel import steps and troubleshooting tips.
+
+---
+
+## 📊 Usage
+
+Once the database is built and populated:
+
+- Query the Gold-layer views directly for ad-hoc analysis, e.g.:
+  ```sql
+  SELECT * FROM gold.vw_monthly_trends ORDER BY year, month;
+  ```
+- Open `dashboard/superstoredashboard.pbix` in Power BI Desktop to explore the interactive report across its 4 pages: **Executive Summary**, **Product Analysis**, **Customer Insights**, and **Operations**.
+- Refresh the Power BI data source if your SQL Server instance name differs from the one the report was originally built against (see `docs/setup_guide.md`, Step 5).
+
+*(See [Dashboard Preview](#️-dashboard-preview) above for screenshots of all 4 pages.)*
+
+---
+
+## ⚙️ Configuration
+
+There's no application config file in this project — the only environment-specific setting is the **SQL Server instance name**, which is referenced in two places:
+
+1. **SSMS Import Wizard** (Step 2 of setup) — set to your local instance when importing the Excel data
+2. **Power BI data source** — update via *Home → Transform Data → Data source settings* if it doesn't match your instance
+
+The Gold layer's date range is configurable via parameters on `gold.usp_LoadGoldLayer`:
+```sql
+EXEC gold.usp_LoadGoldLayer
+    @DateRangeStart = '2016-01-01',
+    @DateRangeEnd   = '2020-12-31';
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 📦 Deployment
 
-| Category | Technology |
-|----------|------------|
-| Database | Microsoft SQL Server |
-| ETL | T-SQL |
-| Data Warehouse | Medallion Architecture |
-| Data Modeling | Kimball Star Schema |
-| Visualization | Power BI & Chart.js |
-| Version Control | Git & GitHub |
+This project is designed to run on a **local SQL Server instance** for learning/portfolio purposes and isn't currently packaged for cloud deployment. If you want to adapt it:
+
+- **Azure SQL Database** — the T-SQL is largely compatible; you'd need to replace the SSMS Excel Import Wizard step with Azure Data Factory, Power Query, or a `BULK INSERT`/`OPENROWSET` approach, since Azure SQL can't use the local Import Wizard.
+- **Power BI Service** — publish the `.pbix` file and set up a scheduled refresh with a gateway if the database moves off your local machine.
+
+These aren't implemented in this repo yet — see **Future Improvements** below.
 
 ---
 
-## 📝 License
+## 🔭 Future Improvements
 
-This project was created for **educational** and **portfolio** purposes.
-
----
-
-## 👤 Author
-
-**Mohamed**
-
-- GitHub: **[@diixon](https://github.com/diixon)**
+- [ ] Automate the Excel → Bronze import (e.g., via `BULK INSERT`, SSIS, or a Python/PowerShell script) to remove the manual wizard step
+- [ ] Parameterize the SQL Server connection instead of relying on manual Import Wizard/Power BI reconfiguration
+- [ ] Add a lightweight CI check (e.g., SQL linting) if the project moves to a shared/team setting
+- [ ] Explore Azure SQL + Power BI Service deployment for a fully cloud-hosted version
+- [ ] Add row-level data validation tests (e.g., using tSQLt or a simple assertion script) to catch data-quality regressions automatically
 
 ---
 
-## ⭐ If you found this project useful, consider giving it a star!
+## 🤝 Contribution Guidelines
+
+This is currently a personal learning project, but suggestions and feedback are welcome:
+
+1. Open an issue describing the suggestion or bug
+2. Fork the repo and create a feature branch
+3. Submit a pull request with a clear description of the change
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+*Note: `data/raw/raw_data.xlsx` is a variant of the widely-used "Sample Superstore" dataset, commonly used for BI/analytics learning and demos. It is included here for educational/portfolio purposes.*
+
+---
+
+## 👤 About the Author
+
+**Mohamed Ahmed**
+
+- GitHub: [@diixon](https://github.com/diixon)
+- LinkedIn: [mohamed-ahmed-421b9541b](https://www.linkedin.com/in/mohamed-ahmed-421b9541b)
+- Email: [mmoohamedahmed1@gmail.com](mailto:mmoohamedahmed1@gmail.com)
+
+This project was built as a hands-on exercise in data warehouse design, SQL Server development, and Power BI dashboarding — feel free to reach out with questions or feedback.
