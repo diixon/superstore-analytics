@@ -33,7 +33,7 @@ Full technical detail on each stage lives in [`docs/architecture.md`](docs/archi
 - [Features](#-features)
 - [Technologies Used](#️-technologies-used)
 - [Project Structure](#-project-structure)
-- [Dashboard Preview](#-dashboard-preview)
+- [Dashboard Preview](#️-dashboard-preview)
 - [Installation](#-installation)
 - [Database Setup](#️-database-setup)
 - [Usage](#-usage)
