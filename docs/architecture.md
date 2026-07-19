@@ -24,6 +24,8 @@ Excel (raw_data.xlsx)
 | **Silver** | `silver` | Cleansed, validated, deduplicated data |
 | **Gold** | `gold` | Business-ready star schema (dimensions + fact table) consumed by Power BI |
 
+The Bronze layer can be populated either by an automated Python pipeline (`scripts/`, recommended — see §8) or manually via SSMS's Import Wizard; both feed into the same Silver and Gold stored procedures described below.
+
 ### Why Medallion architecture?
 
 - **Traceability** — raw data is preserved untouched in Bronze, so any transformation can be audited or re-run without re-importing from Excel.
@@ -45,7 +47,7 @@ Three tables are created to receive data exactly as it exists in the source Exce
 | `bronze.people` | Sales person to region mapping | 5 |
 | `bronze.returns_order` | Order IDs flagged as returned | 800 |
 
-**How data gets here:** Because the source is an Excel workbook, data is loaded using the SQL Server Import/Export Wizard (SSMS → *Tasks → Import Data*), running one query per sheet (`SELECT * FROM [Orders$]`, etc.) directly into the corresponding Bronze table. This step is manual/GUI-based and cannot be expressed as pure T-SQL — see `docs/setup_guide.md` for the exact steps.
+**How data gets here:** Data is loaded from `data/raw/raw_data.xlsx` into Bronze using one of two methods: the automated Python pipeline (`scripts/`, recommended — see §8 below), or manually via the SQL Server Import/Export Wizard (SSMS → *Tasks → Import Data*), running one query per sheet (`SELECT * FROM [Orders$]`, etc.) directly into the corresponding Bronze table. See `docs/setup_guide.md` for the exact steps for both options.
 
 ---
 
@@ -158,5 +160,35 @@ Power BI Desktop connects to the `gold` schema (dimension tables + `gold.fact_sa
 - `gold.dim_date` is marked as the official **Date Table**.
 - Surrogate keys (`*_key` columns) are hidden from report view — they exist only to support relationships.
 - 13 DAX measures (e.g., `Total Sales`, `Profit Margin`, `CLV`, `Return Rate`, `On Time Delivery %`) are built on top of the fact table and consumed across the four report pages (Executive Summary, Product Analysis, Customer Insights, Operations).
+
+---
+
+## 8. Python Automation Layer
+
+**Folder:** `scripts/`
+
+The entire Excel → Bronze → Silver → Gold flow can be run with a single command (`python scripts/run_pipeline.py`) instead of the manual SSMS Import Wizard. This layer was built to remove the one part of the original pipeline that couldn't be expressed in pure T-SQL: getting data out of an Excel workbook and into SQL Server in the first place.
+
+### 8.1 Design
+
+| File | Responsibility |
+|---|---|
+| `db_utils.py` | A single shared `get_connection()` function (the SQL Server connection string) and the project's `logging` configuration. Every other script imports from here rather than duplicating connection details. |
+| `load_people.py`, `load_orders.py`, `load_returns.py` | One function each, taking an open database `connection` as a parameter. Each reads its Excel sheet with `pandas`, renames columns to match the SQL schema, converts `NaN` (pandas' missing-value marker) to `None` (so SQL Server sees `NULL` instead of an invalid float), truncates the target Bronze table, and bulk-inserts the cleaned rows using `cursor.executemany()`. |
+| `run_transformations.py` | Two functions, `run_silver_layer()` and `run_gold_layer()`, that simply `EXEC` the existing `silver.usp_LoadSilverLayer` and `gold.usp_LoadGoldLayer` stored procedures — the same procedures used by the manual path, so both paths are guaranteed to produce identical results. |
+| `run_pipeline.py` | The master script. Opens one connection, calls each loader and transformation function in sequence, wrapping each call in its own `try/except` block so a failure in one step (e.g., Orders) doesn't prevent the others from being attempted, and closes the connection at the end. |
+| `dev_notes/` | Exploratory scripts written while building this pipeline (initial data exploration, a standalone connection test, and a `try/except` practice example). Not part of the production pipeline — kept for reference. |
+
+### 8.2 Why `executemany()` instead of row-by-row inserts
+
+Early versions of the loaders inserted one row at a time via `cursor.execute()` in a loop — functionally correct, but slow: each call is a separate round-trip to SQL Server. For the ~10,000-row Orders table, this took roughly 20 seconds. Switching to `cursor.executemany()`, which batches all rows into far fewer round-trips, cut this to about 1.5 seconds — a ~13x improvement with no change in the actual data produced.
+
+### 8.3 Error handling and logging
+
+Rather than `print()` statements, the pipeline uses Python's built-in `logging` module, configured once in `db_utils.py` to write timestamped, leveled messages (`INFO` for normal progress, `ERROR` for failures) to `pipeline.log` in the project root. Combined with `try/except` around each pipeline step in `run_pipeline.py`, this means a failure in any single step is recorded clearly — which table, what the underlying SQL Server or Python error was — without stopping the rest of the pipeline or crashing with a raw traceback.
+
+### 8.4 Idempotency
+
+Every loader truncates its target Bronze table before inserting, and the Silver/Gold stored procedures drop and rebuild their own tables on every run. This means `python scripts/run_pipeline.py` can be re-run any number of times and always leaves the warehouse in the same state relative to whatever is currently in `data/raw/raw_data.xlsx` — running it once or ten times produces an identical result.
 
 See `docs/data_dictionary.md` for full column-level definitions of every table, and `docs/setup_guide.md` for how to rebuild this pipeline end-to-end.
